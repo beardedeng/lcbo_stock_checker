@@ -142,4 +142,4 @@ df["last updated"] = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
 
 df.to_csv("Archive\stock_level.csv", index=False)
 
-print("\nDone!")
+print("\nDone!!")
