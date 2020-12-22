@@ -14,7 +14,6 @@ import requests
 # import database
 import pandas as pd
 
-df = pd.read_csv("productid.csv")
 
 base_url = "https://www.lcbo.com/webapp/wcs/stores/servlet/PhysicalStoreInventoryView?langId=-1&storeId=10203&catalogId=10051&productId="
 
@@ -117,29 +116,43 @@ def get_soup_information(soupey):
     return elems_dict_temp
 
 
-y = get_pagesource(base_url, df["ProductID"])
+def main():
 
-elems_list = []
+    while True:
 
-for x in range(len(y)):
+        df = pd.read_csv("productid.csv")
 
-    z = get_soup(y[x])
+        y = get_pagesource(base_url, df["ProductID"])
 
-    dict1 = {"product_name": df["Name"][x], "product_id": df["ProductID"][x]}
+        elems_list = []
 
-    z = get_soup_information(z)
+        for x in range(len(y)):
 
-    dict1.update(z)
-    dictionary_copy = dict1.copy()
-    elems_list.append(dictionary_copy)
+            z = get_soup(y[x])
 
-    # print search query
-    print("\n" + str(df["Name"][x]) + " (" + str(df["ProductID"][x]) + ")")
+            dict1 = {"product_name": df["Name"][x], "product_id": df["ProductID"][x]}
 
-df = pd.DataFrame(elems_list)
+            z = get_soup_information(z)
 
-df["last updated"] = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
+            dict1.update(z)
+            dictionary_copy = dict1.copy()
+            elems_list.append(dictionary_copy)
 
-df.to_csv("Archive\stock_level.csv", index=False)
+            # # print search query
+            # print("\n" + str(df["Name"][x]) + " (" + str(df["ProductID"][x]) + ")")
 
-print("\nDone!!")
+        df = pd.DataFrame(elems_list)
+
+        current_date_time = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
+
+        df["last updated"] = current_date_time
+
+        df.to_csv("Supporting_Files\stock_level.csv", index=False)
+
+        print(f"\nSuccessfully finished running at {current_date_time}")
+
+        time.sleep(30)
+
+
+if __name__ == "__main__":
+    main()
