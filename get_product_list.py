@@ -12,6 +12,8 @@ from sqlalchemy import (
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.ext.declarative import declarative_base
 
+from datetime import datetime
+
 engine = create_engine(
     "postgresql://pythonTest:postgres@localhost:5432/lcbo_stock", echo=False
 )  # alternatives 'sqlite:///:memory:' or sqlite:///pytest.db'
@@ -81,6 +83,12 @@ def add_user(user_id, user_name=None):
     return User(discord_id=user_id, user_name=user_name)
 
 
+def add_stock(productid):
+    spirits = session.query(Spirits).filter(Spirits.product_id == productid).first()
+    stock = Stock(spirit=spirits)
+    return stock
+
+
 def user_to_spirit(discord_ids, product_ids):
     # check if product_id in tracked entries, if not, tells user to add it
     if session.query(Spirits).filter(Spirits.product_id == product_ids).count() == 0:
@@ -111,7 +119,70 @@ def user_to_spirit(discord_ids, product_ids):
     spirit_to_add.users
 
 
-def get_all_spirits(discord_ids):
+def get_all_spirits():
+    """Get all Spirits' product ids and product names
+
+    Returns:
+        [list]: [list of tuples of all product ids and product names]
+    """
+
+    all_spirits = session.query(Spirits.product_id, Spirits.product_name).all()
+
+    # product_ids = [value for value, in all_spirits]
+
+    return all_spirits
+
+
+def get_all_spirits_and_stock():
+    all_spirit_stocks = session.query(Spirits).join(Stock, Spirits.stock).all()
+
+    # empty list
+    temp_list = []
+
+    for row in all_spirit_stocks:
+        tup1 = (row.product_id, row.stock.stock_level)
+        temp_list.append(tup1)
+
+    return temp_list
+
+
+def update_stock(stockinfo):
+    """Updates stock information from a filtered list of product ids
+
+    Args:
+        stockinfo ([type]): [description]
+    """
+    # get list of product ids from stockinfo list of dictionaries
+    res = [sub["product_id"] for sub in stockinfo]
+
+    # filtered stocks
+    spirit_stocks = (
+        session.query(Stock)
+        .join(Spirits, Stock.spirit)
+        .filter(Spirits.product_id.in_(res))
+        .all()
+    )
+
+    # update filtered stocks with information from stockinfo
+    for stock_filtered in spirit_stocks:
+
+        spiritid = stock_filtered.spirit_id
+        productid = (
+            session.query(Spirits).filter(Spirits.id == spiritid).one().product_id
+        )
+        # productid = stock_filtered.product_id
+        res = [sub for sub in stockinfo if sub["product_id"] == productid]
+
+        stock_filtered.in_stock = res[0]["in_stock"]
+        stock_filtered.city = res[0]["city"]
+        stock_filtered.store_address = res[0]["store_address"]
+        stock_filtered.store_phone_number = res[0]["store_phone_number"]
+        stock_filtered.store_id = res[0]["store_id"]
+        stock_filtered.stock_level = res[0]["stock_level"]
+        stock_filtered.last_updated = get_date_time()
+
+
+def get_all_spirits_by_user(discord_ids):
     all_spirits = (
         session.query(Spirits)
         .join(User, Spirits.users)
@@ -125,45 +196,8 @@ def get_all_spirits(discord_ids):
     print("")
 
 
-def add_spirits_already_defined():
-    # spirit1 = add_spirit("Glenfiddich 14 Year Old Bourbon Barrel Reserve", 203517)
-    # spirit2 = add_spirit("Four Roses Small Batch Bourbon", 56294)
-    # spirit3 = add_spirit("Hibiki Harmony", 61344)
-    # spirit4 = add_spirit("Eagle Rare 10 Year Old Kentucky Straight Bourbon", 65616)
-    # spirit5 = add_spirit("Caribou Crossing Single Barrel Canadian Whisky", 99510)
-    # spirit6 = add_spirit("Blanton's Original Bourbon", 56284)
-    # spirit7 = add_spirit(
-    #     "Blanton's Single Barrel Special Reserve Kentucky Straight Bourbon", 64174
-    # )
-    # spirit8 = add_spirit("Clynelish 14 Year Old Single Malt Scotch Whisky", 105003)
-    # spirit9 = add_spirit("Michter's US-1 Single Barrel Rye Whiskey", 59906)
-    # spirit10 = add_spirit("W. L. Weller 12-Year-Old Kentucky Straight Bourbon", 56807)
-    # spirit11 = add_spirit("W.L. Weller Special Reserve Bourbon", 59181)
-    # spirit12 = add_spirit("Alberta Premium Cask Strength Rye (2019)", 299017)
-    # spirit13 = add_spirit("Elijah Craig Barrel Proof", 115515)
-    # spirit14 = add_spirit("Redbreast 12 Year Old Cask Strength Irish Whiskey", 60321)
-
-    # session.add_all(
-    #     [
-    #         spirit1,
-    #         spirit2,
-    #         spirit3,
-    #         spirit4,
-    #         spirit5,
-    #         spirit6,
-    #         spirit7,
-    #         spirit8,
-    #         spirit9,
-    #         spirit10,
-    #         spirit11,
-    #         spirit12,
-    #         spirit13,
-    #         user1,
-    #         user2,
-    #     ]
-    # )
-
-    pass
+def get_date_time():
+    return datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
 
 
 # # testing module
@@ -176,6 +210,18 @@ def add_spirits_already_defined():
 # print("")
 
 
+def try_commmit():
+    try:
+        session.commit()
+
+    except:
+        session.rollback()
+        raise
+
+    finally:
+        session.close()
+
+
 def main_loop():
     try:
         # user1 = User(discord_id=135951952814145537, user_name="bRIKO")
@@ -186,6 +232,37 @@ def main_loop():
         # user_to_spirit(discord_ids="135951952814145537", product_ids=60321)
 
         # get_all_spirits(discord_ids="135951952814145537")
+
+        # session.add(add_spirit("Talisker 15-Year-Old Single Malt Scotch Whisky", 13506))
+
+        # get_all_spirits()
+
+        # elems_list = [
+        #     {
+        #         "city": "Mississauga",
+        #         "in_stock": "Yes",
+        #         "product_id": 203517,
+        #         "product_name": "Glenfiddich 14 Year ...el Reserve",
+        #         "stock_level": "61",
+        #         "store_address": "25 Hillcrest Avenue",
+        #         "store_id": "715841812",
+        #         "store_phone_number": "(905) 279-6837",
+        #     },
+        #     {
+        #         "city": "Richmond hill",
+        #         "in_stock": "Yes",
+        #         "product_id": 56294,
+        #         "product_name": "Four Roses Small Batch Bourbon",
+        #         "stock_level": "42",
+        #         "store_address": "12300 Yonge Street",
+        #         "store_id": "715841851",
+        #         "store_phone_number": "(905) 773-5275",
+        #     },
+        # ]
+
+        # update_stock(elems_list)
+
+        get_all_spirits_and_stock()
 
         session.commit()
 
