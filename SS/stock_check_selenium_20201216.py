@@ -54,7 +54,21 @@ def start_selenium_instance():
     return driver
 
 
-def get_pagesource(url, counter, driver):
+def get_pagesource(url, counter):
+    options = webdriver.ChromeOptions()
+
+    # only log fatal errors
+    options.add_argument("log-level=3")
+
+    # base options
+    options.add_argument("--ignore-certificate-errors")
+    options.add_argument("--ingognito")
+    options.add_argument("--headless")
+
+    driver = webdriver.Chrome(
+        options=options,
+        executable_path=r"C:\Users\bRIKO\Python Resources\Version 87\chromedriver.exe",
+    )
 
     page_source_list = []
 
@@ -140,14 +154,11 @@ def get_soup_information(soupey):
 
 def main():
 
-    # open driver
-    driver = start_selenium_instance()
-
     while True:
 
         df = pd.read_csv("productid.csv")
 
-        y = get_pagesource(base_url, df["ProductID"], driver)
+        y = get_pagesource(base_url, df["ProductID"])
 
         elems_list = []
 
@@ -163,6 +174,9 @@ def main():
             dictionary_copy = dict1.copy()
             elems_list.append(dictionary_copy)
 
+            # # print search query
+            # print("\n" + str(df["Name"][x]) + " (" + str(df["ProductID"][x]) + ")")
+
         df = pd.DataFrame(elems_list)
 
         current_date_time = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
@@ -172,17 +186,6 @@ def main():
         df.to_csv("Supporting_Files\stock_level.csv", index=False)
 
         print(f"\nSuccessfully finished running at {current_date_time}")
-
-        df_in_stock_yes = df[df["in_stock"] == "Yes"]
-
-        df_length = len(df_in_stock_yes["in_stock"])
-
-        print(f"\n{df_length} products are in stock:")
-
-        for row in range(df_length):
-            print(
-                f"{df_in_stock_yes['product_name'][row]} {df_in_stock_yes['product_id'][row]} - Stock Level: {df_in_stock_yes['stock_level'][row]}"
-            )
 
         time.sleep(30)
 

@@ -5,6 +5,7 @@ import time
 import os
 import shutil
 from datetime import datetime
+import random
 
 # requests imports
 import pprint
@@ -14,8 +15,8 @@ import requests
 # import pandas
 import pandas as pd
 
-# ipmort sqlalchemy integration
-from get_product_list import (
+# import sqlalchemy integration
+from lcbo_postgresql import (
     get_all_spirits,
     Session,
     update_stock,
@@ -56,7 +57,7 @@ def start_selenium_instance():
 
     driver = webdriver.Chrome(
         options=options,
-        executable_path=r"C:\Users\bRIKO\Python Resources\Version 87\chromedriver.exe",
+        executable_path=r"C:\Users\bRIKO\Google Drive\Learning\Programming\ChromeDriver\chromedriver_win32\chromedriver.exe",
     )
 
     return driver
@@ -72,6 +73,10 @@ def get_pagesource(url, counter, driver):
         driver.get(url + str(item))
 
         page_source_list.append(driver.page_source)
+
+        time.sleep(3)
+
+        
 
     return page_source_list
 
@@ -91,33 +96,43 @@ def get_soup_information(soupey):
     else:
         in_stock = "No"
 
+    # get product name from product id
+    product_name = soupey.select('#content > div:nth-child(1) > div.col-xs-8.namePartPriceContainer > h1 > a')[0].get_text()
+    product_name = ' '.join(product_name.split())
+
     # location with highest stock
     if in_stock == "Yes":
         city = (
             soupey.find_all("div", {"class": "col-xs-12"})[3]
-            .contents[0]
+            .contents[1]
             .get_text()
             .capitalize()
         )
 
         store_address = (
             soupey.find_all("div", {"class": "col-xs-12"})[3]
-            .contents[1]
+            .contents[2]
             .contents[2]
             .title()
         )
         store_phone_number = (
             soupey.find_all("div", {"class": "col-xs-12"})[3]
-            .contents[1]
+            .contents[2]
             .contents[4]
             .strip()
         )
+        if store_phone_number[0] != "(":
+            store_phone_number = (
+                soupey.find_all("div", {"class": "col-xs-12"})[3]
+                .contents[2]
+                .contents[6]
+                .strip()
+            )
 
         store_id = int(
             (
                 soupey.find_all("div", {"class": "col-xs-12"})[3]
-                .contents[2]
-                .contents[1]
+                .contents[4]
                 .contents[0]["data-store-id"]
             )
         )
@@ -125,9 +140,8 @@ def get_soup_information(soupey):
         stock_level = int(
             (
                 soupey.find_all("div", {"class": "col-xs-12"})[3]
-                .contents[2]
+                .contents[3]
                 .contents[0]
-                .get_text()
             )
         )
 
@@ -145,10 +159,51 @@ def get_soup_information(soupey):
         "store_phone_number": store_phone_number,
         "store_id": store_id,
         "stock_level": stock_level,
+        "product_name": product_name,
     }
 
     return elems_dict_temp
 
+
+def get_soup_information_temp(soupey):
+    '''
+    grab all data from the 5 columns in the stock table
+    '''
+    product_name = soupey.select('#content > div:nth-child(1) > div.col-xs-8.namePartPriceContainer > h1 > a')[0].get_text()
+    product_name = ' '.join(product_name.split())
+    elems_list = []
+
+    for counter,soup in enumerate(soupey.find_all("div", {"class": "col-xs-12"})[2:]):
+
+        if not isinstance(soup.contents[0],str):
+
+            city = soup.contents[1].contents[0]
+            store_address = soup.contents[2].contents[2]
+            store_phone_number = soup.contents[2].contents[4]
+            store_id = soup.contents[4].contents[0]['data-store-id']
+            stock_level = soup.contents[3].contents[0]
+            
+            if store_phone_number[0] != "(":
+                store_address = store_address + " " + soup.contents[2].contents[4]
+                store_phone_number = soup.contents[2].contents[6]
+
+        else:
+            break
+
+        elems_list_temp = [counter,
+            [
+                city,
+                store_address,
+                store_phone_number,
+                store_id,
+                stock_level,
+                product_name,
+            ]
+        ]
+
+        elems_list.append(elems_list_temp)
+
+    return elems_list
 
 def get_stock_level_info(page_source, all_spirits):
     # define empty list for stock_level information list of dictionaries
@@ -160,7 +215,7 @@ def get_stock_level_info(page_source, all_spirits):
 
         dict1 = {"product_name": all_spirits[x][1], "product_id": all_spirits[x][0]}
 
-        stock_level_info = get_soup_information(soup)
+        stock_level_info = get_soup_information_temp(soup)
 
         dict1.update(stock_level_info)
         dictionary_copy = dict1.copy()
@@ -228,10 +283,9 @@ def has_stock_changed(original_stock, current_stock):
             tup3.append((tup1[y][0], "IS"))
 
         else:
-            # print(f"{tup1[y][0]} stock status hasn't changed.")
-
-            # marks update as no change
-            tup3.append((tup1[y][0], "NC"))
+            # # marks update as no change
+            # tup3.append((tup1[y][0], "NC"))
+            pass
 
     return tup3
 
@@ -264,17 +318,18 @@ def main():
         # update postgresql stock table with elems_list
         update_stock(elems_list)
 
-        elems_list[0]["stock_level"] = 0
-        elems_list[5]["stock_level"] = 1
-
         # check to see if stock has increased from 0 or fallen to 0
         has_it_changed = has_stock_changed(existing_stock_levels, elems_list)
 
         # commit but if errors, rollback
         try_commmit()
 
+        # acknowledgement of run
+        current_date_time = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
+        print(f"\nSuccessfully ran on {current_date_time}")
+
         # sleep timer for scraper
-        time.sleep(30)
+        time.sleep(28+5*random.random())
 
 
 if __name__ == "__main__":

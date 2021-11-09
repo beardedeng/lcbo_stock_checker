@@ -11,14 +11,33 @@ import pprint
 import bs4
 import requests
 
-# import database
+# import pandas
 import pandas as pd
 
+# ipmort sqlalchemy integration
+from get_product_list import get_all_spirits
 
 base_url = "https://www.lcbo.com/webapp/wcs/stores/servlet/PhysicalStoreInventoryView?langId=-1&storeId=10203&catalogId=10051&productId="
 
 
-def get_pagesource(url, counter):
+def run_timeout(timer=None):
+
+    if timer is None:
+        while True:
+            start_selenium_instance()
+    else:
+        datetime_now = datetime.datetime.now()
+        while datetime.timedelta(hours=timer) + datetime_now > datetime.datetime.now():
+            start_selenium_instance()
+
+
+def start_selenium_instance():
+    """Persists an instance of selenium. For a specific time if timer is given
+
+    Args:
+        timer ([type], optional): [time in hours]. Defaults to None.
+    """
+
     options = webdriver.ChromeOptions()
 
     # only log fatal errors
@@ -33,6 +52,11 @@ def get_pagesource(url, counter):
         options=options,
         executable_path=r"C:\Users\bRIKO\Python Resources\Version 87\chromedriver.exe",
     )
+
+    return driver
+
+
+def get_pagesource(url, counter, driver):
 
     page_source_list = []
 
@@ -118,11 +142,17 @@ def get_soup_information(soupey):
 
 def main():
 
+    # get list of spirits
+    all_spirits = get_all_spirits()
+
+    # open driver
+    driver = start_selenium_instance()
+
     while True:
 
         df = pd.read_csv("productid.csv")
 
-        y = get_pagesource(base_url, df["ProductID"])
+        y = get_pagesource(base_url, df["ProductID"], driver)
 
         elems_list = []
 
@@ -138,9 +168,6 @@ def main():
             dictionary_copy = dict1.copy()
             elems_list.append(dictionary_copy)
 
-            # # print search query
-            # print("\n" + str(df["Name"][x]) + " (" + str(df["ProductID"][x]) + ")")
-
         df = pd.DataFrame(elems_list)
 
         current_date_time = datetime.now().strftime("%m/%d/%Y, %H:%M:%S")
@@ -150,6 +177,17 @@ def main():
         df.to_csv("Supporting_Files\stock_level.csv", index=False)
 
         print(f"\nSuccessfully finished running at {current_date_time}")
+
+        df_in_stock_yes = df[df["in_stock"] == "Yes"]
+
+        df_length = len(df_in_stock_yes["in_stock"])
+
+        print(f"\n{df_length} products are in stock:")
+
+        for row in range(df_length):
+            print(
+                f"{df_in_stock_yes['product_name'][row]} {df_in_stock_yes['product_id'][row]} - Stock Level: {df_in_stock_yes['stock_level'][row]}"
+            )
 
         time.sleep(30)
 
